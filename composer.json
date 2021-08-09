@@ -1,0 +1,29 @@
+{
+    "name": "basecode/querymodel",
+    "description": "QueryModel Component...",
+    "keywords": [
+        "BaseCode",
+        "QueryModel",
+        "Thcoder"
+    ],
+    "minimum-stability": "stable",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Arthur Henrique",
+            "email": "arthurthcoder@gmail.com",
+            "role": "Developer"
+        }
+    ],
+    "config": {
+        "vendor-dir": "vendor"
+    },
+    "autoload": {
+        "psr-4": {
+            "BaseCode\\QueryModel\\": "src"
+        }
+    },
+    "require": {
+        "php": ">=7.0"
+    }
+}

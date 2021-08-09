@@ -1,0 +1,3 @@
+# **QueryModel**
+
+>Documentation coming soon

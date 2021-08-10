@@ -5,12 +5,23 @@ use PDO;
 use PDOException;
 use Exception;
 
+/**
+ * Class Connection
+ * @package BaseCode\QueryModel
+ */
 Class Connection
 {
 
+    /** @var PDO */
     private static $conn;
+
+    /** @var PDOException|Exception */
     private static $error;
 
+    /**
+     * @param string $dbConfig
+     * @return PDO|null
+     */
     public static function get(string $dbConfig = "DB_CONFIG"): ?PDO
     {
         try{
@@ -25,11 +36,15 @@ Class Connection
 
             $dbConfig = constant($dbConfig);
 
+            if (!isset($dbConfig["options"][PDO::ATTR_ERRMODE])) {
+                $dbConfig["options"][PDO::ATTR_ERRMODE] = PDO::ERRMODE_EXCEPTION;
+            }
+
             self::$conn = new PDO(
                 $dbConfig["driver"].":host=".$dbConfig["host"].";dbname=".$dbConfig["name"],
                 $dbConfig["user"],
                 $dbConfig["password"],
-                (isset($dbConfig["options"]) ? ($dbConfig["options"] ?: null) : null)
+                $dbConfig["options"]
             );
 
             return self::$conn;
@@ -40,7 +55,7 @@ Class Connection
         }
     }
 
-    public static function error(): ?object
+    public static function error()
     {
         return self::$error;
     }

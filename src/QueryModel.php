@@ -2,24 +2,40 @@
 namespace BaseCode\QueryModel;
 
 use PDO;
+use PDOException;
 use stdClass;
 
+/**
+ * Class QueryModel
+ * @package BaseCode\QueryModel
+ */
 Abstract Class QueryModel
 {
+    /** @var PDO */
     protected $conn;
 
+    /** @var string */
     protected $table;
-    protected $primary = "id";
-    protected $timestamp = true;
-    protected $required;
 
+    /** @var string */
+    protected $primary = "id";
+
+    /** @var stdClass */
     private $data;
 
+    /** @var string */
     private $prepare;
+
+    /** @var array */
     private $params;
+
+    /** @var string */
     private $limit;
+
+    /** @var string */
     private $orderBy;
 
+    /** @var array */
     private $error;
 
     public function __construct()
@@ -27,7 +43,10 @@ Abstract Class QueryModel
         $this->conn = Connection::get();
 
         if (!$this->conn) {
-            die(Connection::error());
+            $error = Connection::error();
+            $this->setError($error->getMessage(), $error->getCode());
+            print_r($this->error());
+            exit;
         }
 
         if (empty($this->table)) {
@@ -37,11 +56,18 @@ Abstract Class QueryModel
         
     }
 
-    public function __isset(string $name)
+    /**
+     * @param string $name
+     * @return bool
+     */
+    public function __isset(string $name): bool
     {
         return isset($this->data->$name);
     }
 
+    /**
+     * @param string $name
+     */
     public function __get(string $name)
     {
         if (isset($this->data->$name)) {
@@ -50,11 +76,19 @@ Abstract Class QueryModel
         return null;
     }
 
+    /**
+     * @param string $name
+     * @param mixed $value
+     */
     public function __set(string $name, $value)
     {
         $this->data($name, $value);
     }
 
+    /**
+     * @param string $name
+     * @param mixed $value
+     */
     private function data(string $name, $value)
     {
         if (empty($this->data)) {
@@ -63,12 +97,21 @@ Abstract Class QueryModel
         $this->data->$name = $value;
     }
 
+    /**
+     * @param array $params
+     * @return QueryModel
+     */
     public function params(array $params): QueryModel
     {
         $this->params = $params;
         return $this;
     }
 
+    /**
+     * @param string $prepare
+     * @param array $params
+     * @return QueryModel
+     */
     public function prepare(string $prepare, array $params = null): QueryModel
     {
         $this->prepare = $prepare;
@@ -78,6 +121,11 @@ Abstract Class QueryModel
         return $this;
     }
 
+    /**
+     * @param int $init
+     * @param int $end
+     * @return QueryModel
+     */
     public function limit(int $init, int $end = null): QueryModel
     {
         $limit = (is_null($end) ? "0, {$init}" : "{$init}, {$end}");
@@ -85,29 +133,52 @@ Abstract Class QueryModel
         return $this;
     }
 
+    /**
+     * @param string $orderBy
+     * @return QueryModel
+     */
     public function orderBy(string $orderBy): QueryModel
     {
         $this->orderBy = "ORDER BY {$orderBy}";
         return $this;
     }
 
-    public function execute($mode = PDO::FETCH_OBJ): ?array
+    /**
+     * @param bool $select
+     * @param int $mode
+     */
+    public function execute(bool $select = true, int $mode = PDO::FETCH_OBJ)
     {
-        if (empty($this->prepare)) {
+        try {
+            if (empty($this->prepare)) {
+                return null;
+            }
+    
+            $prepare = $this->prepare;
+    
+            if ($select) {
+                $prepare = "{$this->prepare} {$this->orderBy} {$this->limit}";
+            }
+    
+            $statement = $this->conn->prepare($prepare);
+    
+            if ($statement->execute(($this->params ?: null))) {
+                return ($select ? $statement->fetchAll($mode) : $statement);
+            }
+    
+            $error = $statement->errorInfo();
+            $this->setError($error[1], $error[2]);
+            return null;
+
+        } catch (PDOException $e) {
+            $this->setError($e->getMessage(), $e->getCode());
             return null;
         }
-
-        $prepare = "{$this->prepare} {$this->orderBy} {$this->limit}";
-        $statement = $this->conn->prepare($prepare);
-
-        if ($statement->execute(($this->params ?: null))) {
-            return $statement->fetchAll($mode);
-        }
-
-        $this->error = $statement->errorInfo();
-        return null;
     }
 
+    /**
+     * @return bool
+     */
     public function fill(): bool
     {
         $fetch = $this->execute();
@@ -120,50 +191,123 @@ Abstract Class QueryModel
         return false;
     }
 
-    public function all($mode = PDO::FETCH_OBJ): QueryModel
+    /**
+     * @param int $mode
+     * @return QueryModel
+     */
+    public function all(int $mode = PDO::FETCH_OBJ): QueryModel
     {
         $this->prepare("SELECT * FROM {$this->table}");
         return $this;
     }
 
+    /**
+     * @param string $columns
+     * @param string $cond
+     * @param array|null $params
+     * @return QueryModel
+     */
     public function findBy(string $columns, string $cond, ?array $params = null): QueryModel
     {
         $this->prepare("SELECT {$columns} FROM {$this->table} WHERE {$cond}", $params);
         return $this;
     }
 
-    public function findById(int $id, $mode = PDO::FETCH_OBJ): QueryModel
+    /**
+     * @param int $id
+     * @param int $mode
+     * @return QueryModel
+     */
+    public function findById(int $id, int $mode = PDO::FETCH_OBJ): QueryModel
     {
         $prepare = "SELECT * FROM {$this->table} WHERE {$this->primary} = :id";
         $this->prepare($prepare, ["id" => $id]);
         return $this;
     }
 
+    /**
+     * @return bool
+     */
     public function save(): bool
     {
-        if (!$this->require()) {
-            return false;
+        $primary = $this->primary;
+
+        if (!isset($this->data->$primary)) {
+            if (!$this->require()) {
+                return false;
+            }
         }
 
-        $primary = $this->primary;
+        if (isset($this->timestamp)) {
+            $timestamp = date("Y-m-d H:i:s");
+
+            if (isset($this->timestamp["create"])) {
+                $this->data($this->timestamp["create"], $timestamp);
+            }
+
+            if (isset($this->timestamp["update"])) {
+                $this->data($this->timestamp["update"], $timestamp);
+            }
+        }
+
         $data = $this->filter((array) $this->data);
 
         if (isset($data[$primary])) {
+
+            if (isset($this->timestamp["create"])) {
+                $data = $this->unset($data, $this->timestamp["create"]);
+            }
+
             $prepare = $this->transform($this->unset($data, $primary), "update");
             $prepare = "UPDATE {$this->table} SET {$prepare} WHERE {$primary} = :{$primary}";
-            $statement = $this->conn->prepare($prepare);
+            $this->prepare($prepare, $data);
         }else{
             $prepare = $this->transform($data, "create");
-            $statement = $this->conn->prepare("INSERT INTO {$this->table} {$prepare}");
+            $this->prepare("INSERT INTO {$this->table} {$prepare}", $data);
         }
         
-        if ($statement->execute($data)) {
+        $execute = $this->execute(false);
+        if ($execute) {
+            $this->findById($this->conn->lastInsertId())->fill();
             return true;
         }
-        $this->error = $statement->errorInfo();
         return false;
     }
 
+    /**
+     * @param string $cond
+     * @param array $params
+     * @return bool
+     */
+    public function delete(string $cond, array $params = null): bool
+    {
+        $prepare = "DELETE FROM {$this->table} WHERE {$cond}";
+        $execute = $this->prepare($prepare, $params)->execute(false);
+        if ($execute) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @return bool
+     */
+    public function destroy(): bool
+    {
+        $primary = $this->primary;
+
+        if (!isset($this->data->$primary)) {
+            return false;
+        }
+
+        $id = $this->data->$primary;
+        return $this->delete("{$primary} = :{$primary}", [$primary => $id]);
+    }
+
+    /**
+     * @param array $data
+     * @param string $format
+     */
     private function transform(array $data, string $format)
     {
         switch ($format) {
@@ -184,9 +328,12 @@ Abstract Class QueryModel
         }
     }
 
-    private function require()
+    /**
+     * @return bool
+     */
+    private function require(): bool
     {
-        if ($this->required) {
+        if (isset($this->required) && is_array($this->required)) {
             foreach ($this->required as $name) {
                 if (!isset($this->data->$name)) {
                     $require[] = $name;
@@ -194,7 +341,7 @@ Abstract Class QueryModel
             }
             
             if (isset($require)) {
-                $this->error = ["require values ( ".implode(", ", $require)." )"];
+                $this->setError("require values ( ".implode(", ", $require)." )", 0);
                 return false;
             }
             return true;
@@ -202,6 +349,11 @@ Abstract Class QueryModel
         return true;
     }
 
+    /**
+     * @param array $array
+     * @param string $key
+     * @return array|null
+     */
     private function unset(array $array, string $key): ?array
     {
         if (isset($array[$key])) {
@@ -210,6 +362,10 @@ Abstract Class QueryModel
         return $array;
     }
 
+    /**
+     * @param array $array
+     * @return array
+     */
     private function filter(array $array): array
     {
         foreach ($array as $key => $value) {
@@ -218,6 +374,21 @@ Abstract Class QueryModel
         return $array;
     }
 
+    /**
+     * @param string $message
+     * @param mixed $code
+     */
+    protected function setError(string $message, $code)
+    {
+        $this->error = [
+            "message" => $message,
+            "code" => $code
+        ];
+    }
+
+    /**
+     * @return array|null
+     */
     public function error(): ?array
     {
         return $this->error;

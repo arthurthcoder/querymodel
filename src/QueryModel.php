@@ -11,9 +11,6 @@ use stdClass;
  */
 Abstract Class QueryModel
 {
-    /** @var PDO */
-    protected $conn;
-
     /** @var string */
     protected $table;
 
@@ -40,20 +37,10 @@ Abstract Class QueryModel
 
     public function __construct()
     {
-        $this->conn = Connection::get();
-
-        if (!$this->conn) {
-            $error = Connection::error();
-            $this->setError($error->getMessage(), $error->getCode());
-            print_r($this->error());
-            exit;
-        }
-
         if (empty($this->table)) {
             $table = strtolower(get_class($this));
             $this->table = "{$table}s";
         }
-        
     }
 
     /**
@@ -83,6 +70,34 @@ Abstract Class QueryModel
     public function __set(string $name, $value)
     {
         $this->data($name, $value);
+    }
+
+    /**
+     * @return array
+     */
+    public function __debugInfo()
+    {
+        return [
+            'data' => $this->unset((array) $this->data, $this->primary)
+        ];
+    }
+
+    /**
+     * @return PDO|null
+     */
+    protected function conn(): PDO
+    {
+        $conn = Connection::get();
+
+        if ($conn) {
+            return $conn;
+        }
+
+        $error = Connection::error();
+        $this->setError($error->getMessage(), $error->getCode());
+        
+        echo json_encode($this->error());
+        exit;
     }
 
     /**
@@ -160,7 +175,7 @@ Abstract Class QueryModel
                 $prepare = "{$this->prepare} {$this->orderBy} {$this->limit}";
             }
     
-            $statement = $this->conn->prepare($prepare);
+            $statement = $this->conn()->prepare($prepare);
     
             if ($statement->execute(($this->params ?: null))) {
                 return ($select ? $statement->fetchAll($mode) : $statement);
@@ -189,6 +204,18 @@ Abstract Class QueryModel
             return true;
         }
         return false;
+    }
+
+    /**
+     * @return stdClass|null
+     */
+    public function first(): ?stdClass
+    {
+        $fetch = $this->execute();
+        if ($fetch) {
+            return array_shift($fetch);
+        }
+        return null;
     }
 
     /**
@@ -252,7 +279,7 @@ Abstract Class QueryModel
 
         $data = $this->filter((array) $this->data);
 
-        if (isset($data[$primary])) {
+        if (isset($this->data->$primary)) {
 
             if (isset($this->timestamp["create"])) {
                 $data = $this->unset($data, $this->timestamp["create"]);
@@ -267,8 +294,11 @@ Abstract Class QueryModel
         }
         
         $execute = $this->execute(false);
-        if ($execute) {
-            $this->findById($this->conn->lastInsertId())->fill();
+
+        if ($execute->rowCount()) {
+            $id = isset($this->data->$primary) ? $this->data->$primary : null;
+
+            $this->findById(($id ?? $this->conn()->lastInsertId()))->fill();
             return true;
         }
         return false;

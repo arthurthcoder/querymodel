@@ -9,7 +9,7 @@
 
     Class User extends QueryModel
     {
-        // protected $table = "users";
+        protected $table = "users";
         protected $primary = "idUser";
 
         protected $timestamp = [
@@ -63,9 +63,15 @@
 
     // print_r($user);
 
-    print_r($user->all()->execute());
+    // print_r($user->all()->execute());
 
     // print_r($user->all()->orderBy("nameUser ASC")->limit(3)->execute());
+    
+
+    $user->findById(20)->fill();
+
+    print_r($user);
+    
     
     print_r($user->error());
     

@@ -23,9 +23,55 @@
             "passwordUser"
         ];
 
+        // public function posts()
+        // {
+        //     $primary = $this->primary;
+        //     if (!isset($this->$primary)) {
+        //         return null;
+        //     }
+
+        //     return $this->inner([
+        //         User::class => "u",
+        //         Post::class => "p"
+        //     ], ["u.idUser = p.id_user"], "idUser = :id", "p.*")->params([
+        //         "id" => $this->$primary
+        //     ])->execute();
+        // }
+
+        // public function posts()
+        // {
+        //     return $this->inner([
+        //         User::class => "u",
+        //         Post::class => "p"
+        //     ], ["u.idUser = p.id_user"], null, "p.*")->execute();
+        // }
+
+        public function posts()
+        {
+            return $this->inner([
+                Post::class
+            ], ["User.idUser = Post.id_user"], null, "User.nameUser, Post.title, Post.message")->execute();
+        }
+
+    }
+
+    Class Post extends QueryModel
+    {
+        protected $table = "posts";
+
+        protected $required = [
+            "title",
+            "message"
+        ];
+
+        protected $timestamp = [
+            "create" => "at_created",
+            "update" => "at_updated"
+        ];
     }
 
     $user = new User();
+    $post = new Post();
 
     echo "<pre>";
     
@@ -40,7 +86,6 @@
     //     "idUser = :id",
     //     ["id" => 2]
     // )->execute());
-
 
     // print_r($user->findBy(
     //     "*",
@@ -67,13 +112,22 @@
 
     // print_r($user->all()->orderBy("nameUser ASC")->limit(3)->execute());
     
+    // $user->findById(20)->fill();
 
-    $user->findById(20)->fill();
+    // if ($user->findById(18)->fill()) {
+    //     $id = $user->idUser;
+    //     $post->id_user = $id;
+    //     $post->title = "Titulo post {$id}";
+    //     $post->message = "#{$id} Mensagem post...";
+    //     $post->save();
+    // }
 
-    print_r($user);
     
+    $user->findById(15)->fill();
+    print_r($user->posts());
     
     print_r($user->error());
+    // print_r($user->error());
     
     echo "<pre>";
 

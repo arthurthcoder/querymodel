@@ -35,14 +35,6 @@ Abstract Class QueryModel
     /** @var array */
     private $error;
 
-    public function __construct()
-    {
-        if (empty($this->table)) {
-            $table = strtolower(get_class($this));
-            $this->table = "{$table}s";
-        }
-    }
-
     /**
      * @param string $name
      * @return bool
@@ -83,7 +75,7 @@ Abstract Class QueryModel
     }
 
     /**
-     * @return PDO|null
+     * @return PDO
      */
     protected function conn(): PDO
     {
@@ -98,6 +90,14 @@ Abstract Class QueryModel
         
         echo json_encode($this->error());
         exit;
+    }
+
+    /**
+     * @return string
+     */
+    public function table(): ?string
+    {
+        return $this->table ?: null;
     }
 
     /**
@@ -253,6 +253,98 @@ Abstract Class QueryModel
     }
 
     /**
+     * @param array $models
+     * @param array $on
+     * @param string|null $cond
+     * @param string $columns
+     * @return QueryModel
+     */
+    public function inner(array $models, array $on, string $cond = null, string $columns = "*"): QueryModel
+    {
+        $this->join("INNER", $models, $on, $cond, $columns);
+        return $this;   
+    }
+
+    /**
+     * @param array $models
+     * @param array $on
+     * @param string|null $cond
+     * @param string $columns
+     * @return QueryModel
+     */
+    public function left(array $models, array $on, string $cond = null, string $columns = "*"): QueryModel
+    {
+        $this->join("LEFT", $models, $on, $cond, $columns);
+        return $this;   
+    }
+
+    /**
+     * @param array $models
+     * @param array $on
+     * @param string|null $cond
+     * @param string $columns
+     * @return QueryModel
+     */
+    public function right(array $models, array $on, string $cond = null, string $columns = "*"): QueryModel
+    {
+        $this->join("RIGHT", $models, $on, $cond, $columns);
+        return $this;   
+    }
+
+    /**
+     * @param string $type
+     * @param array $models
+     * @param array $on
+     * @param string|null $cond
+     * @param string $columns
+     */
+    private function join(string $type, array $models, array $on, ?string $cond, string $columns)
+    {
+        $separator = "@table";
+        $on = "{$separator} ".implode(" {$separator} ", $on);
+
+        $class = static::class;
+        $exists = isset($models[$class]) ? true : in_array($class, $models);
+
+        if (!$exists) {
+            $models[] = $class;
+        }
+
+        foreach($models as $indexe => $value) {
+            $model = is_string($indexe) ? $indexe : $value;
+            $search = $value;
+
+            if ($model == $class) {
+                $replace = $this->table();
+            }else {
+                $replace = (new $model())->table();
+            }
+
+            $on = preg_replace([
+                "~^({$search}\.)~",
+                "~(\s{$search}\.)~"
+            ], ["{$replace}.", " {$replace}."], $on);
+
+            $columns = preg_replace([
+                "~^({$search}\.)~",
+                "~(\s{$search}\.)~"
+            ], ["{$replace}.", " {$replace}."], $columns);
+
+            if ($model == $class) {
+                continue;
+            }
+
+            $on = preg_replace("({$separator})", "{$type} JOIN {$replace} ON", $on, 1);
+        }
+
+        if ($cond) {
+            $cond = "WHERE {$cond}";
+        }
+
+        $this->prepare("SELECT {$columns} FROM {$this->table} {$on} {$cond}");
+    }
+
+    /**
      * @return bool
      */
     public function save(): bool
@@ -295,7 +387,7 @@ Abstract Class QueryModel
         
         $execute = $this->execute(false);
 
-        if ($execute->rowCount()) {
+        if ($execute && $execute->rowCount()) {
             $id = isset($this->data->$primary) ? $this->data->$primary : null;
 
             $this->findById(($id ?? $this->conn()->lastInsertId()))->fill();
@@ -337,8 +429,9 @@ Abstract Class QueryModel
     /**
      * @param array $data
      * @param string $format
+     * @return string|null
      */
-    private function transform(array $data, string $format)
+    private function transform(array $data, string $format): ?string
     {
         switch ($format) {
             case 'create':
@@ -355,6 +448,8 @@ Abstract Class QueryModel
                 return implode(", ", $update);
             break;
 
+            default:
+                return null;
         }
     }
 
@@ -382,9 +477,9 @@ Abstract Class QueryModel
     /**
      * @param array $array
      * @param string $key
-     * @return array|null
+     * @return array
      */
-    private function unset(array $array, string $key): ?array
+    private function unset(array $array, string $key): array
     {
         if (isset($array[$key])) {
             unset($array[$key]);
@@ -425,4 +520,3 @@ Abstract Class QueryModel
     }
 
 }
-?>

@@ -60,4 +60,3 @@ Class Connection
         return self::$error;
     }
 }
-?>

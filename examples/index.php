@@ -10,47 +10,24 @@
     Class User extends QueryModel
     {
         protected $table = "users";
-        protected $primary = "idUser";
-
-        protected $timestamp = [
-            "create" => "at_created",
-            "update" => "at_updated"
-        ];
+        // protected $primary = "id";
 
         protected $required = [
-            "nameUser",
-            "emailUser",
-            "passwordUser"
+            "name",
+            "email",
+            "password"
         ];
 
-        // public function posts()
-        // {
-        //     $primary = $this->primary;
-        //     if (!isset($this->$primary)) {
-        //         return null;
-        //     }
-
-        //     return $this->inner([
-        //         User::class => "u",
-        //         Post::class => "p"
-        //     ], ["u.idUser = p.id_user"], "idUser = :id", "p.*")->params([
-        //         "id" => $this->$primary
-        //     ])->execute();
-        // }
-
-        // public function posts()
-        // {
-        //     return $this->inner([
-        //         User::class => "u",
-        //         Post::class => "p"
-        //     ], ["u.idUser = p.id_user"], null, "p.*")->execute();
-        // }
+        protected $timestamp = [
+            "create" => "created_at",
+            "update" => "updated_at"
+        ];
 
         public function posts()
         {
-            return $this->inner([
-                Post::class
-            ], ["User.idUser = Post.id_user"], null, "User.nameUser, Post.title, Post.message")->execute();
+            return $this->select("Post.*")
+            ->join(Post::class, "User.id = Post.id")
+            ->execute();
         }
 
     }
@@ -58,77 +35,86 @@
     Class Post extends QueryModel
     {
         protected $table = "posts";
+        // protected $primary = "id";
 
         protected $required = [
+            "id_user",
             "title",
             "message"
         ];
 
         protected $timestamp = [
-            "create" => "at_created",
-            "update" => "at_updated"
+            "create" => "created_at",
+            "update" => "updated_at"
         ];
+
     }
 
     $user = new User();
     $post = new Post();
 
     echo "<pre>";
-    
-    // $test = $user->findBy(
-    //     "*",
-    //     "idUser = :id OR emailUser = :email",
-    //     ["id" => $user->idUser, "email" => $user->emailUser]
-    // )->execute();
 
-    // print_r($user->findBy(
-    //     "*",
-    //     "idUser = :id",
-    //     ["id" => 2]
-    // )->execute());
-
-    // print_r($user->findBy(
-    //     "*",
-    //     "nameUser LIKE :name",
-    //     ["name" => "%henrique"])->execute()
-    // );
-
-    /* example save */
-    // $user->nameUser = "Thcoder";
-    // $user->emailUser = "contato@thcoder.com.br";
-    // $user->passwordUser = "Senha123";
+    // insert register
+    // $user->name = "test";
+    // $user->email = "test@gmail.com";
+    // $user->password = md5("123");
     // $user->save();
     
-    /* example delete */
-    // $user->delete("nameUser = :name", ["names" => "coder"]);
-
-    /* example destroy */
-    // $user->idUser = 2;
-    // $user->destroy();
-
-    // print_r($user);
-
+    // select all
     // print_r($user->all()->execute());
 
-    // print_r($user->all()->orderBy("nameUser ASC")->limit(3)->execute());
-    
-    // $user->findById(20)->fill();
+    // select all set columns
+    // print_r($user->select("name, email")->all()->execute());
 
-    // if ($user->findById(18)->fill()) {
-    //     $id = $user->idUser;
-    //     $post->id_user = $id;
-    //     $post->title = "Titulo post {$id}";
-    //     $post->message = "#{$id} Mensagem post...";
-    //     $post->save();
-    // }
+    // select all set limit
+    // print_r($user->all()->limit(1)->execute());
 
-    
-    $user->findById(15)->fill();
-    print_r($user->posts());
-    
+    // select all set order by
+    // print_r($user->all()->orderBy("id DESC")->execute());
+
+    // select all return first
+    // print_r($user->all()->first());
+
+    // select by id and fill in the model
+    // $user->findById(2)->fill();
+    // print_r($user);
+
+    // select by id and return object stdClass with the data
+    // print_r($user->findById(2)->first());
+
+    // select by id and update
+    // $user->findById(1)->fill();
+    // $user->email = "update@gmail.com";
+    // $user->save();
+
+    // select by condition without parameters | not recommended
+    // $result = $user->findBy("email = 'update@gmail.com'")->execute();
+    // print_r($result);
+
+    // select by condition with parameters | recommended
+    // $result = $user->findBy("email = :email")->params([
+    //     "email" => "update@gmail.com"
+    // ])->execute();
+    // print_r($result);
+
+    // destroy user current
+    // $user->findById(4)->fill();
+    // $user->destroy();
+
+    // delete by condition without parameters | not recommended
+    // $user->delete("email = 'test@gmail.com'");
+
+    // delete by condition with parameters | recommended
+    // $user->delete("email = :email", [
+    //     "email" => "test@gmail.com"
+    // ]);
+
+    // print_r($user->posts());
+
+    // erros
     print_r($user->error());
-    // print_r($user->error());
-    
+
     echo "<pre>";
 
 ?>

@@ -17,11 +17,20 @@ Abstract Class QueryModel
     /** @var string */
     protected $primary = "id";
 
+    /** @var string */
+    private $select = "*";
+
+    /** @var string */
+    private $action;
+
     /** @var stdClass */
     private $data;
 
     /** @var string */
-    private $prepare;
+    private $query;
+
+    /** @var string */
+    private $condition;
 
     /** @var array */
     private $params;
@@ -113,26 +122,53 @@ Abstract Class QueryModel
     }
 
     /**
+     * @param string $columns
+     * @return QueryModel
+     */
+    public function select(string $columns): QueryModel
+    {
+        $this->select = $columns;
+        return $this;
+    }
+
+    /**
+     * @param string $action
+     * @return QueryModel
+     */
+    private function action(string $action): QueryModel
+    {
+        $this->action = $action;
+        return $this;
+    }
+
+    /**
+     * @param string $query
+     * @param bool $concatenate
+     * @return QueryModel
+     */
+    public function query(string $query, bool $concatenate = false): QueryModel
+    {
+        $this->query = $concatenate ? "{$this->query} $query" : $query;
+        return $this;
+    }
+
+    /**
+     * @param string $condition
+     * @return QueryModel
+     */
+    public function where(string $condition): QueryModel
+    {
+        $this->condition = "WHERE {$condition}";
+        return $this;
+    }
+
+    /**
      * @param array $params
      * @return QueryModel
      */
     public function params(array $params): QueryModel
     {
         $this->params = $params;
-        return $this;
-    }
-
-    /**
-     * @param string $prepare
-     * @param array $params
-     * @return QueryModel
-     */
-    public function prepare(string $prepare, array $params = null): QueryModel
-    {
-        $this->prepare = $prepare;
-        if ($params) {
-            $this->params($params);
-        }
         return $this;
     }
 
@@ -165,19 +201,19 @@ Abstract Class QueryModel
     public function execute(bool $select = true, int $mode = PDO::FETCH_OBJ)
     {
         try {
-            if (empty($this->prepare)) {
-                return null;
-            }
     
-            $prepare = $this->prepare;
+            $prepare = "{$this->action} {$this->query} {$this->condition}";
     
             if ($select) {
-                $prepare = "{$this->prepare} {$this->orderBy} {$this->limit}";
+                $prepare = "{$prepare} {$this->orderBy} {$this->limit}";
             }
     
             $statement = $this->conn()->prepare($prepare);
+            $params = $this->params;
+
+            $this->reset();
     
-            if ($statement->execute(($this->params ?: null))) {
+            if ($statement->execute(($params ?: null))) {
                 return ($select ? $statement->fetchAll($mode) : $statement);
             }
     
@@ -191,19 +227,15 @@ Abstract Class QueryModel
         }
     }
 
-    /**
-     * @return bool
-     */
-    public function fill(): bool
+    private function reset()
     {
-        $fetch = $this->execute();
-        if ($fetch) {
-            foreach (array_shift($fetch) as $name => $value) {
-                $this->data($name, $value);
-            }
-            return true;
-        }
-        return false;
+        $this->select = "*";
+        $this->action = "";
+        $this->query = "";
+        $this->params = [];
+        $this->condition = "";
+        $this->orderBy = "";
+        $this->limit = "";
     }
 
     /**
@@ -219,129 +251,94 @@ Abstract Class QueryModel
     }
 
     /**
-     * @param int $mode
-     * @return QueryModel
+     * @return bool
      */
-    public function all(int $mode = PDO::FETCH_OBJ): QueryModel
+    public function fill(): bool
     {
-        $this->prepare("SELECT * FROM {$this->table}");
-        return $this;
+        $first = $this->first();
+        if ($first) {
+            foreach ($first as $name => $value) {
+                $this->data($name, $value);
+            }
+            return true;
+        }
+        return false;
     }
 
     /**
-     * @param string $columns
-     * @param string $cond
-     * @param array|null $params
      * @return QueryModel
      */
-    public function findBy(string $columns, string $cond, ?array $params = null): QueryModel
+    public function all(): QueryModel
     {
-        $this->prepare("SELECT {$columns} FROM {$this->table} WHERE {$cond}", $params);
-        return $this;
+        return $this->action("SELECT {$this->select} FROM {$this->table}");
+    }
+
+    /**
+     * @param string $condition
+     * @return QueryModel
+     */
+    public function findBy(string $condition): QueryModel
+    {
+        return $this->action("SELECT {$this->select} FROM {$this->table}")
+        ->where($condition);
     }
 
     /**
      * @param int $id
-     * @param int $mode
      * @return QueryModel
      */
-    public function findById(int $id, int $mode = PDO::FETCH_OBJ): QueryModel
+    public function findById(int $id): QueryModel
     {
-        $prepare = "SELECT * FROM {$this->table} WHERE {$this->primary} = :id";
-        $this->prepare($prepare, ["id" => $id]);
-        return $this;
+        return $this->action("SELECT {$this->select} FROM {$this->table}")
+        ->where("{$this->primary} = :id")
+        ->params(["id" => $id]);
     }
 
     /**
-     * @param array $models
-     * @param array $on
-     * @param string|null $cond
-     * @param string $columns
-     * @return QueryModel
-     */
-    public function inner(array $models, array $on, string $cond = null, string $columns = "*"): QueryModel
-    {
-        $this->join("INNER", $models, $on, $cond, $columns);
-        return $this;   
-    }
-
-    /**
-     * @param array $models
-     * @param array $on
-     * @param string|null $cond
-     * @param string $columns
-     * @return QueryModel
-     */
-    public function left(array $models, array $on, string $cond = null, string $columns = "*"): QueryModel
-    {
-        $this->join("LEFT", $models, $on, $cond, $columns);
-        return $this;   
-    }
-
-    /**
-     * @param array $models
-     * @param array $on
-     * @param string|null $cond
-     * @param string $columns
-     * @return QueryModel
-     */
-    public function right(array $models, array $on, string $cond = null, string $columns = "*"): QueryModel
-    {
-        $this->join("RIGHT", $models, $on, $cond, $columns);
-        return $this;   
-    }
-
-    /**
+     * @param string $model
+     * @param string $on
      * @param string $type
-     * @param array $models
-     * @param array $on
-     * @param string|null $cond
-     * @param string $columns
+     * @return QueryModel
      */
-    private function join(string $type, array $models, array $on, ?string $cond, string $columns)
+    public function join(string $model, string $on, string $type = "INNER"): QueryModel
     {
-        $separator = "@table";
-        $on = "{$separator} ".implode(" {$separator} ", $on);
+        $modelTable = (new $model())->table();
+        $action = "SELECT {$this->select} FROM {$this->table}";
 
-        $class = static::class;
-        $exists = isset($models[$class]) ? true : in_array($class, $models);
+        $action = preg_replace(
+            [
+                "~".static::class."\.~",
+                "~{$model}\.~",
+            ],
+            [
+                "{$this->table}.",
+                "{$modelTable}."
+            ],
+            $action
+        );
 
-        if (!$exists) {
-            $models[] = $class;
+        $this->action($action);
+
+        $on = preg_replace(
+            [
+                "~".static::class."\.~",
+                "~{$model}\.~",
+            ],
+            [
+                "{$this->table}.",
+                "{$modelTable}."
+            ],
+            $on
+        );
+
+        $type = strtoupper($type);
+        $allowed = ["INNER", "LEFT", "RIGHT"];
+
+        if (!in_array($type, $allowed)) {
+            $type = $allowed[0];
         }
 
-        foreach($models as $indexe => $value) {
-            $model = is_string($indexe) ? $indexe : $value;
-            $search = $value;
-
-            if ($model == $class) {
-                $replace = $this->table();
-            }else {
-                $replace = (new $model())->table();
-            }
-
-            $on = preg_replace([
-                "~^({$search}\.)~",
-                "~(\s{$search}\.)~"
-            ], ["{$replace}.", " {$replace}."], $on);
-
-            $columns = preg_replace([
-                "~^({$search}\.)~",
-                "~(\s{$search}\.)~"
-            ], ["{$replace}.", " {$replace}."], $columns);
-
-            if ($model == $class) {
-                continue;
-            }
-
-            $on = preg_replace("({$separator})", "{$type} JOIN {$replace} ON", $on, 1);
-        }
-
-        if ($cond) {
-            $cond = "WHERE {$cond}";
-        }
-
-        $this->prepare("SELECT {$columns} FROM {$this->table} {$on} {$cond}");
+        return $this->query("{$type} JOIN {$modelTable} ON {$on}", true);
     }
 
     /**
@@ -377,12 +374,18 @@ Abstract Class QueryModel
                 $data = $this->unset($data, $this->timestamp["create"]);
             }
 
-            $prepare = $this->transform($this->unset($data, $primary), "update");
-            $prepare = "UPDATE {$this->table} SET {$prepare} WHERE {$primary} = :{$primary}";
-            $this->prepare($prepare, $data);
+            $query = $this->transform($this->unset($data, $primary), "update");
+
+            $this->action("UPDATE {$this->table} SET")
+            ->query($query)
+            ->where("{$primary} = :{$primary}")
+            ->params($data);
         }else{
-            $prepare = $this->transform($data, "create");
-            $this->prepare("INSERT INTO {$this->table} {$prepare}", $data);
+            $query = $this->transform($data, "create");
+
+            $this->action("INSERT INTO {$this->table}")
+            ->query($query)
+            ->params($data);
         }
         
         $execute = $this->execute(false);
@@ -397,15 +400,21 @@ Abstract Class QueryModel
     }
 
     /**
-     * @param string $cond
-     * @param array $params
+     * @param string $condition
+     * @param array|null $params
      * @return bool
      */
-    public function delete(string $cond, array $params = null): bool
+    public function delete(string $condition, array $params = null): bool
     {
-        $prepare = "DELETE FROM {$this->table} WHERE {$cond}";
-        $execute = $this->prepare($prepare, $params)->execute(false);
-        if ($execute) {
+        $this->action("DELETE FROM {$this->table}")->where($condition);
+
+        if ($params) {
+            $this->params($params);
+        }
+        
+        $execute = $this->execute(false);
+
+        if ($execute && $execute->rowCount()) {
             return true;
         }
         return false;
@@ -423,7 +432,7 @@ Abstract Class QueryModel
         }
 
         $id = $this->data->$primary;
-        return $this->delete("{$primary} = :{$primary}", [$primary => $id]);
+        return $this->delete("{$primary} = :id", ["id" => $id]);
     }
 
     /**

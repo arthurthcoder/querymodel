@@ -25,8 +25,17 @@
 
         public function posts()
         {
-            return $this->select("Post.*")
-            ->join(Post::class, "User.id = Post.id")
+            return $this->select("users.name, posts.title")
+            ->join("INNER JOIN posts ON users.id = posts.id_user")
+            ->where("users.id = :id")
+            ->params(["id" => $this->id])
+            ->execute();
+        }
+
+        public function usersPosts()
+        {
+            return $this->select("users.id, users.name, posts.title")
+            ->join("INNER JOIN posts ON users.id = posts.id_user")
             ->execute();
         }
 
@@ -110,7 +119,10 @@
     //     "email" => "test@gmail.com"
     // ]);
 
+    // mode of use select joins (INNER JOIN, LEFT JOIN, RIGHT JOIN...)
+    // $user->findById(9)->fill();
     // print_r($user->posts());
+
 
     // erros
     print_r($user->error());

@@ -102,14 +102,6 @@ Abstract Class QueryModel
     }
 
     /**
-     * @return string
-     */
-    public function table(): ?string
-    {
-        return $this->table ?: null;
-    }
-
-    /**
      * @param string $name
      * @param mixed $value
      */
@@ -143,12 +135,11 @@ Abstract Class QueryModel
 
     /**
      * @param string $query
-     * @param bool $concatenate
      * @return QueryModel
      */
-    public function query(string $query, bool $concatenate = false): QueryModel
+    public function query(string $query): QueryModel
     {
-        $this->query = $concatenate ? "{$this->query} $query" : $query;
+        $this->query = $query;
         return $this;
     }
 
@@ -251,6 +242,18 @@ Abstract Class QueryModel
     }
 
     /**
+     * @return stdClass|null
+     */
+    public function last(): ?stdClass
+    {
+        $fetch = $this->execute();
+        if ($fetch) {
+            return array_pop($fetch);
+        }
+        return null;
+    }
+
+    /**
      * @return bool
      */
     public function fill(): bool
@@ -295,50 +298,13 @@ Abstract Class QueryModel
     }
 
     /**
-     * @param string $model
-     * @param string $on
-     * @param string $type
+     * @param string $query
      * @return QueryModel
      */
-    public function join(string $model, string $on, string $type = "INNER"): QueryModel
+    public function join(string $query): QueryModel
     {
-        $modelTable = (new $model())->table();
-        $action = "SELECT {$this->select} FROM {$this->table}";
-
-        $action = preg_replace(
-            [
-                "~".static::class."\.~",
-                "~{$model}\.~",
-            ],
-            [
-                "{$this->table}.",
-                "{$modelTable}."
-            ],
-            $action
-        );
-
-        $this->action($action);
-
-        $on = preg_replace(
-            [
-                "~".static::class."\.~",
-                "~{$model}\.~",
-            ],
-            [
-                "{$this->table}.",
-                "{$modelTable}."
-            ],
-            $on
-        );
-
-        $type = strtoupper($type);
-        $allowed = ["INNER", "LEFT", "RIGHT"];
-
-        if (!in_array($type, $allowed)) {
-            $type = $allowed[0];
-        }
-
-        return $this->query("{$type} JOIN {$modelTable} ON {$on}", true);
+        return $this->action("SELECT {$this->select} FROM {$this->table}")
+        ->query($query);
     }
 
     /**
